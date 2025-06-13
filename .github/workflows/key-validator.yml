@@ -1,0 +1,61 @@
+name: Key Validator
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled]
+
+jobs:
+  key-validator:
+    name: Key Validator
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR Title for Jira Key
+        uses: actions/github-script@v7
+        id: title_check
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const match = title.match(/(VCE-\d+)/);
+            if (!match) {
+              core.setFailed("❌ PR title must include a Jira key like VCE-12.");
+            } else {
+              core.notice(`✅ Jira key detected: ${match[1]}`);
+            }
+
+      - name: Check All Commits for Jira Key Format
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const match = title.match(/(VCE-\d+)/);
+            if (!match) {
+              core.setFailed("❌ Cannot extract Jira key from PR title.");
+              return;
+            }
+
+            const jiraKey = match[1];
+            const commits = await github.paginate(
+              github.rest.pulls.listCommits,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+              }
+            );
+
+            let failed = false;
+            const requiredFormat = new RegExp(`^${jiraKey}:\n\n.+`, 's');  // 's' allows dot to match newlines
+
+            for (const commit of commits) {
+              const message = commit.commit.message;
+              if (!requiredFormat.test(message)) {
+                core.warning(`❌ Commit message does not follow required format:\n${jiraKey}:\n\n<message>\n\nActual:\n---\n${message}\n---`);
+                failed = true;
+              }
+            }
+
+            if (failed) {
+              core.setFailed(`❌ One or more commits are missing the required format:\n${jiraKey}:\n\n<message>`);
+            } else {
+              core.notice(`✅ All commits match format:\n${jiraKey}:\n\n<message>`);
+            }
