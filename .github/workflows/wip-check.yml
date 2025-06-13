@@ -1,0 +1,21 @@
+name: WIP Check
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+jobs:
+  wip-check:
+    name: WIP Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure PR is not labeled WIP
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(label => label.name.toLowerCase());
+            if (labels.includes("wip")) {
+              core.setFailed("❌ PR has a 'wip' label. Remove it before merging.");
+            } else {
+              core.notice("✅ No 'wip' label found.");
+            }
